@@ -149,7 +149,10 @@ SUPPORT_XAP_ZONE = (
 )
 
 SUPPORT_XAP_SOURCE = (
-    MPEF.VOLUME_MUTE |
+    # VOLUME_SET belongs here: XAPSource implements async_set_volume_level and reports
+    # volume_level, so the capability was always there — only the flag was missing, which
+    # left a source's input gain readable but not settable from any UI.
+    MPEF.VOLUME_MUTE | MPEF.VOLUME_SET |
     MPEF.TURN_ON | MPEF.TURN_OFF
 )
 
