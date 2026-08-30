@@ -149,7 +149,9 @@ Returns `{"command": "GAIN 7 O", "response": ["GAIN 7 O -33.00 A", ...]}`. Pass 
 command body; the `#5<unit>` prefix and the `\r` terminator are added for you.
 
 - `unit` (default 0) addresses other XAPs on the expansion chain.
-- `return_count` (default 2) is how many elements to read back — raise it if a reply looks
-  truncated.
+- `return_count` (default 16) is how many trailing tokens of the reply to keep. It is a
+  tail, not a limit, so too small a value silently drops the front of the answer — at 2,
+  `LABEL 5 O` comes back as `- Patio` with the `3L` missing. The default is past the
+  longest reply seen; asking for more tokens than arrive just returns what arrived.
 - A command the unit refuses comes back as `{"command": ..., "error": ...}` rather than
   raising, because a rejection is a normal result when probing an unfamiliar unit.

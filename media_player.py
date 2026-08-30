@@ -202,7 +202,11 @@ SEND_COMMAND_SCHEMA = vol.Schema(
     {
         vol.Required("command"): cv.string,
         vol.Optional("unit", default=0): vol.All(vol.Coerce(int), vol.Range(min=0, max=7)),
-        vol.Optional("return_count", default=2): vol.All(
+        # `rtnCount` is "keep the last N whitespace-separated tokens of the reply", so a
+        # small value silently truncates: at 2, `LABEL 5 O` returns ["-", "Patio"] and
+        # loses the "3L". 16 is past the longest reply seen, and asking for more tokens
+        # than arrive simply returns what arrived — so the default shows the whole line.
+        vol.Optional("return_count", default=16): vol.All(
             vol.Coerce(int), vol.Range(min=0, max=64)
         ),
     }

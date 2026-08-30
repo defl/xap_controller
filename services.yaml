@@ -27,10 +27,11 @@ send_command:
     return_count:
       name: Return elements
       description: >-
-        How many elements to read back. 2 suits most queries; raise it if a reply is
-        being truncated.
+        How many trailing tokens of the reply to keep. The default of 16 is past the
+        longest reply seen, so you get the whole line; lower it only if you want just the
+        value. At 2, "LABEL 5 O" returns just "- Patio" and drops the "3L".
       required: false
-      default: 2
+      default: 16
       selector:
         number:
           min: 0
