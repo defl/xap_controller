@@ -129,6 +129,7 @@ from XAPX00 import __version__ as XAPVER, XAPX00, XAPCommError, XAPRespError
 from .config_flow import (
     CONF_PATH, CONF_SOURCES, CONF_ZONES, CONF_TYPE, CONF_STEREO, CONF_BAUD,
     CONF_CONNECTION_TYPE, CONF_HOST, CONF_PORT, CONF_TELNET_USERNAME, CONF_TELNET_PASSWORD,
+    CONF_MAX_GAIN,
 )
 
 DOMAIN = 'xap_controller'
@@ -191,6 +192,43 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
     )
 
 
+async def _apply_max_gain(hass, xapconn, raw):
+    """Write the configured per-channel MAXGAIN ceilings to the unit.
+
+    MAXGAIN is a safety limit in the hardware — GAIN cannot be set above it — and it is
+    also the reference a 1.0 volume_level maps to. Both reasons to configure it: an
+    unconfigured unit sits at the +20 dB factory maximum, so a full-scale slider is a
+    speaker-damaging level AND every realistic listening level crowds into the bottom
+    couple of percent of the slider.
+
+    Applied on every setup rather than once, so the ceiling is restored after anyone
+    edits it in G-Ware or from the front panel. Channels left out of the config are not
+    touched.
+    """
+    if not raw or not str(raw).strip():
+        return
+    try:
+        wanted = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        _LOGGER.error("max_gain is not valid JSON, ignoring it: %r", raw)
+        return
+
+    for channel, ceiling in wanted.items():
+        try:
+            chan = int(channel)
+            db = float(ceiling)
+        except (TypeError, ValueError):
+            _LOGGER.error("max_gain entry %r: %r is not a channel/dB pair", channel, ceiling)
+            continue
+        try:
+            await hass.async_add_executor_job(
+                lambda c=chan, d=db: xapconn.setMaxGain(c, d, group="O")
+            )
+            _LOGGER.info("Set MAXGAIN on output %s to %s dB", chan, db)
+        except Exception:  # noqa: BLE001 - a bad channel must not abort the rest
+            _LOGGER.exception("Failed setting MAXGAIN on output %s", chan)
+
+
 async def async_setup_entry(hass, entry, async_add_entities):
     """Set up XAP Controller media player entities from a config entry."""
     sources = json.loads(entry.data[CONF_SOURCES])
@@ -240,6 +278,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
     connected = await hass.async_add_executor_job(xapconn.test_connection)
     if not connected:
         _LOGGER.warning('Not connected to %s', conn_label)
+
+    await _apply_max_gain(hass, xapconn, entry.data.get(CONF_MAX_GAIN, ""))
 
     source_objs = []
     zonesources = {}
