@@ -294,8 +294,12 @@ async def _apply_max_gain(hass, xapconn, raw):
             _LOGGER.error("max_gain entry %r: %r is not a channel/dB pair", channel, ceiling)
             continue
         try:
+            # stereo=0 suppresses the @stereo decorator's "call again with channel+1".
+            # max_gain is declared per channel, so it must write exactly the channels
+            # listed: without this, a stereo setup writes 1&2, 2&3 ... 8&9 — overlapping,
+            # twice the serial traffic, and channel 9 which nobody configured.
             await hass.async_add_executor_job(
-                lambda c=chan, d=db: xapconn.setMaxGain(c, d, group="O")
+                lambda c=chan, d=db: xapconn.setMaxGain(c, d, group="O", stereo=0)
             )
             _LOGGER.info("Set MAXGAIN on output %s to %s dB", chan, db)
         except Exception:  # noqa: BLE001 - a bad channel must not abort the rest
