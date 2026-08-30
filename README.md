@@ -97,3 +97,36 @@ media_player:
 
 Setup Notes:
 For the sources, set the gain levels in the Clearone Console app.  They are very sensitive and should be calibrated to 0db.  I have removed the ability to change the source gain levels from the UI to prevent mis-configuation.  It can be added back through the source gode by adding MPEF.VOLUME_SET to the SOURCE capability list (if you need it, for example if you don't have the Console app available).
+
+## Max gain per output channel (safety ceiling)
+
+`MAXGAIN` is a per-channel ceiling in the XAP hardware: `GAIN` cannot be set above it.
+It is *also* the reference that Home Assistant's `volume_level` is measured against —
+`getPropGain`/`setPropGain` express level as a ratio of it, so `volume_level: 1.0`
+means "this channel's MAXGAIN".
+
+An unconfigured unit leaves MAXGAIN at the **+20 dB factory maximum** on every channel,
+which is bad twice over:
+
+- **Safety.** A slider dragged to 100% drives the output at +20 dB. On ceiling speakers
+  that is not a volume anyone intended.
+- **Usability.** Real listening levels are far below that, so they crowd into the very
+  bottom of the slider. On the unit this was written against, four zones sitting between
+  −22.5 and −33 dB all landed under **1%** — the whole useful range inside two pixels of
+  travel.
+
+Set the optional **Max gain** field on the Sources & Zones step to a JSON object mapping
+output channel to a dB ceiling:
+
+```json
+{"1": -15, "2": -15, "3": -15, "4": -15, "5": -15, "6": -15, "7": -15, "8": -15}
+```
+
+With a −15 dB ceiling, 100% means −15 dB, and a zone at −22.5 dB shows as about 42%.
+
+- Values must be between −65 and +20 dB; channels you leave out are not touched.
+- Leave the field blank to keep the old behaviour and not write MAXGAIN at all.
+- The ceilings are re-applied on every setup, so a change made in G-Ware or from the
+  front panel is restored the next time Home Assistant starts.
+- Lowering MAXGAIN below a channel's current GAIN will pull that GAIN down to the new
+  ceiling — check your current levels before choosing a value.
