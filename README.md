@@ -130,3 +130,26 @@ With a −15 dB ceiling, 100% means −15 dB, and a zone at −22.5 dB shows as 
   front panel is restored the next time Home Assistant starts.
 - Lowering MAXGAIN below a channel's current GAIN will pull that GAIN down to the new
   ceiling — check your current levels before choosing a value.
+
+## Raw command access (`xap_controller.send_command`)
+
+For hands-on work on the unit — reading `LABEL`, `MTRX`, `MAX`, or trying anything the
+entities do not model — call the service rather than opening the serial port from another
+process. `XAPCommand` owns the device address, the terminator, the response parsing and
+the lock, so going through it cannot collide with the entities mid-frame.
+
+```yaml
+action: xap_controller.send_command
+data:
+  command: GAIN 7 O
+response_variable: reply
+```
+
+Returns `{"command": "GAIN 7 O", "response": ["GAIN 7 O -33.00 A", ...]}`. Pass only the
+command body; the `#5<unit>` prefix and the `\r` terminator are added for you.
+
+- `unit` (default 0) addresses other XAPs on the expansion chain.
+- `return_count` (default 2) is how many elements to read back — raise it if a reply looks
+  truncated.
+- A command the unit refuses comes back as `{"command": ..., "error": ...}` rather than
+  raising, because a rejection is a normal result when probing an unfamiliar unit.
