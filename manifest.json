@@ -7,7 +7,7 @@
     "codeowners": [
         "jslove"
     ],
-    "version": "2026.08.30.3",
+    "version": "2026.08.30.4",
     "iot_class": "local_polling",
     "requirements": [
         "XAPX00@git+https://github.com/jslove/XAPX00.git@2026.04.22"
