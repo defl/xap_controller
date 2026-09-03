@@ -727,10 +727,20 @@ class XAPZone(MediaPlayerEntity):
         if self._via_block_checked:
             return self._via_block
         for blk in PROC_BLOCKS:
-            state = await self._xap(
-                lambda b=blk: self._xapx00.getMatrixRouting(
-                    b, XOUT, inGroup="P", outGroup="O", unitCode=XUNIT)
-            )
+            # stereo=0 is required, not an optimisation: the @stereo decorator repeats
+            # the call with the channel argument incremented, which turns block "H"
+            # into "I" and earns an Argument error that would fail the whole zone. This
+            # is a probe of one channel, so the pairing is meaningless here anyway.
+            try:
+                state = await self._xap(
+                    lambda b=blk: self._xapx00.getMatrixRouting(
+                        b, XOUT, inGroup="P", outGroup="O", unitCode=XUNIT, stereo=0)
+                )
+            except (XAPCommError, XAPRespError):
+                # A block this unit will not answer for is simply not the one feeding
+                # us; never let probing take the zone offline.
+                _LOGGER.debug("block %s not probeable for %s", blk, self._name)
+                continue
             if int(state) > 0:
                 self._via_block = blk
                 break
