@@ -118,6 +118,7 @@ import logging
 import functools
 import json
 import threading
+from datetime import timedelta
 
 import voluptuous as vol
 
@@ -146,6 +147,11 @@ SRC_OFF = 'Off'
 # input -> processing -> output, which leaves no direct input/output crosspoint for
 # the plain matrix lookup to find.
 PROC_BLOCKS = "ABCDEFGH"
+
+# The media_player default is 10s. Every poll is serial traffic through one lock, and
+# sources now refresh too, so the default put a near-continuous load on the port. The
+# levels this reads change on human timescales; 30s is plenty.
+SCAN_INTERVAL = timedelta(seconds=30)
 
 SUPPORT_XAP_ZONE = (
     MPEF.VOLUME_MUTE | MPEF.VOLUME_SET |
@@ -582,6 +588,22 @@ class XAPSource(MediaPlayerEntity):
         """Turn off media player."""
         await self.async_mute_volume(mute=1)
         self._state = STATE_OFF
+
+    async def async_update(self):
+        """Re-read level and mute from the unit.
+
+        Sources previously had no update method at all, so their state was whatever
+        `_firstConnect` cached at setup. Anything that changed the unit afterwards - the
+        front panel, G-Ware, a serial command - left the entity stale indefinitely, and
+        a source showing "off" while its channel was plainly unmuted is a confusing
+        place to start debugging silence. Zones already polled; this brings sources into
+        line.
+        """
+        if not self.connectionLive():
+            return
+        await self._get_volume_level()
+        await self._get_mute_status()
+        self._state = STATE_OFF if self._isMuted else STATE_ON
 
 
 class XAPZone(MediaPlayerEntity):
