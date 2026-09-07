@@ -8,7 +8,7 @@
         "@jslove",
         "@defl"
     ],
-    "version": "2026.08.31.2",
+    "version": "2026.09.06",
     "iot_class": "local_polling",
     "requirements": [
         "XAPX00@git+https://github.com/jslove/XAPX00.git@2026.04.22"
