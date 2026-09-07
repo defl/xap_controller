@@ -308,6 +308,13 @@ async def _apply_max_gain(hass, xapconn, raw):
     except (json.JSONDecodeError, TypeError):
         _LOGGER.error("max_gain is not valid JSON, ignoring it: %r", raw)
         return
+    if not isinstance(wanted, dict):
+        # Valid JSON is not necessarily the right shape: a list parses cleanly and then
+        # dies on .items(), taking setup down with it. config_flow rejects this, but the
+        # stored entry can predate that validation or be edited by hand.
+        _LOGGER.error(
+            "max_gain must be a JSON object of channel -> dB, ignoring it: %r", raw)
+        return
 
     for channel, ceiling in wanted.items():
         try:
@@ -730,6 +737,11 @@ class XAPZone(MediaPlayerEntity):
             if ":" in output:
                 XUNIT, XOUT =  output.split(":")
             elif output.isdigit():
+                # Unit 0, same as the bare int form. Without this XUNIT is never bound
+                # and the return below raises UnboundLocalError - and a bare numeric
+                # string is a shape config_flow accepts and the README's own examples
+                # mix in, so `{"Kitchen": ["3"]}` used to crash setup.
+                XUNIT = 0
                 XOUT = int(output)
             else:
                 raise Exception('Invalid Output String')
