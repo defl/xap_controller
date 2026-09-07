@@ -128,13 +128,16 @@ With a −15 dB ceiling, 100% means −15 dB, and a zone at −22.5 dB shows as 
 - Leave the field blank to keep the old behaviour and not write MAXGAIN at all.
 - The ceilings are re-applied on every setup, so a change made in G-Ware or from the
   front panel is restored the next time Home Assistant starts.
-- **Lowering MAXGAIN does _not_ pull an existing GAIN down with it.** An earlier version
-  of this file said it did. It does not: on 2026-09-06 a reload wrote all eight ceilings to
-  −15.00 while the outputs stayed at −7.50 to −13.34, leaving every channel sitting *above*
-  its ceiling. `volume_level` is a ratio against MAXGAIN, so those zones then reported
-  values greater than 1.0 — `zone_kitchen_dining` read **2.371**, a slider at 237% — and any
-  slider move wrote dB against a ceiling the levels had never been chosen for. Read `GAIN`
-  and `MAX` back after changing a ceiling; a zone reading above 1.0 is the visible symptom.
+- **Lowering a ceiling pulls that channel's GAIN down to it — but the integration does
+  that, not the hardware.** The XAP leaves an existing level exactly where it was, above
+  its own stated maximum. On 2026-09-06 a reload wrote all eight ceilings to −15.00 while
+  the outputs stayed between −7.50 and −13.34; `volume_level` is a ratio against MAXGAIN,
+  so those zones reported values greater than 1.0 — `zone_kitchen_dining` read **2.371**, a
+  slider at 237% — and every slider move wrote dB against a ceiling the levels had never
+  been chosen for. `_apply_max_gain` now reads each listed channel back after writing its
+  ceiling and clamps anything above it, which is why a configured channel cannot report
+  more than 1.0. The clamp only ever reduces a level, never raises one. A channel you left
+  out of the config is not clamped, and can still read above 1.0.
 
 ## Raw command access (`xap_controller.send_command`)
 

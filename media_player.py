@@ -117,6 +117,7 @@ media_player:
 import logging
 import functools
 import json
+import math
 import threading
 from datetime import timedelta
 
@@ -152,6 +153,11 @@ PROC_BLOCKS = "ABCDEFGH"
 # sources now refresh too, so the default put a near-continuous load on the port. The
 # levels this reads change on human timescales; 30s is plenty.
 SCAN_INTERVAL = timedelta(seconds=30)
+
+# How far above its ceiling a channel must sit before _apply_max_gain pulls it down.
+# The unit reports gain to 0.01 dB; this is well under that, and far above the 1e-7 dB
+# rounding that makes an exactly-at-ceiling channel read as 1.0000000115.
+GAIN_CLAMP_TOLERANCE_DB = 0.005
 
 SUPPORT_XAP_ZONE = (
     MPEF.VOLUME_MUTE | MPEF.VOLUME_SET |
@@ -290,7 +296,10 @@ async def _apply_max_gain(hass, xapconn, raw):
 
     Applied on every setup rather than once, so the ceiling is restored after anyone
     edits it in G-Ware or from the front panel. Channels left out of the config are not
-    touched.
+    touched — including by the clamp below.
+
+    Each listed channel is then clamped to its ceiling, because lowering MAXGAIN does not
+    move a GAIN that is already above it. See the comment in the loop for what that cost.
     """
     if not raw or not str(raw).strip():
         return
@@ -316,6 +325,38 @@ async def _apply_max_gain(hass, xapconn, raw):
                 lambda c=chan, d=db: xapconn.setMaxGain(c, d, group="O", stereo=0)
             )
             _LOGGER.info("Set MAXGAIN on output %s to %s dB", chan, db)
+
+            # A new ceiling does NOT drag an existing GAIN down to it - the XAP leaves the
+            # level exactly where it was, sitting above its own stated maximum. That is not
+            # a theoretical state: on 2026-09-06 a reload wrote all eight ceilings to -15.00
+            # underneath outputs running between -7.50 and -13.34, and because volume_level
+            # is a ratio against MAXGAIN, every zone then reported a value greater than 1.0
+            # - `zone_kitchen_dining` came back 2.371, a slider at 237% - while each slider
+            # move wrote dB against a ceiling those levels had never been chosen for.
+            #
+            # Clamping here makes `volume_level <= 1.0` true by construction, and makes the
+            # ceiling mean what it says. It can only ever reduce a level, never raise one.
+            # Expressed in proportional gain because that is already the ratio to MAXGAIN:
+            # above 1.0 is above the ceiling, and writing 1.0 lands exactly on it.
+            prop = await hass.async_add_executor_job(
+                lambda c=chan: xapconn.getPropGain(c, group="O", stereo=0)
+            )
+            # Compared in dB against a tolerance, not as `prop > 1.0`. db2linear adds a
+            # 1e-7 dB fudge before converting, so a channel sitting exactly ON its ceiling
+            # comes back as 1.0000000115, not 1.0 — a bare `> 1.0` would clamp every
+            # channel on every startup and log a "0.00 dB above" warning each time. The
+            # unit reports gain to 0.01 dB, so anything under half of that is noise.
+            over_db = 20.0 * math.log10(prop) if prop > 0 else 0.0
+            if over_db > GAIN_CLAMP_TOLERANCE_DB:
+                landed = await hass.async_add_executor_job(
+                    lambda c=chan: xapconn.setPropGain(
+                        c, 1.0, isAbsolute=1, group="O", stereo=0)
+                )
+                _LOGGER.warning(
+                    "Output %s sat %.2f dB above its new %s dB ceiling; pulled it down "
+                    "to the ceiling (readback %.4f of MAXGAIN)",
+                    chan, over_db, db, landed,
+                )
         except Exception:  # noqa: BLE001 - a bad channel must not abort the rest
             _LOGGER.exception("Failed setting MAXGAIN on output %s", chan)
 
