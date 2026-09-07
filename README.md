@@ -96,7 +96,7 @@ media_player:
 * XAPType: XAP unit type, eithr XAP800 (default) or XAP400
 
 Setup Notes:
-For the sources, set the gain levels in the Clearone Console app.  They are very sensitive and should be calibrated to 0db.  I have removed the ability to change the source gain levels from the UI to prevent mis-configuation.  It can be added back through the source gode by adding MPEF.VOLUME_SET to the SOURCE capability list (if you need it, for example if you don't have the Console app available).
+For the sources, set the gain levels in the Clearone Console app.  They are very sensitive and should be calibrated to 0db.  Upstream removed the ability to change source gain from the UI to prevent mis-configuration; **this fork puts it back** - `MPEF.VOLUME_SET` is on `SUPPORT_XAP_SOURCE`, so a source's input gain is settable from its own slider. That is deliberate: input trim is where headroom belongs, and needing the Console app to set it makes the one adjustment that prevents converter clipping the least reachable one. Treat it as a calibration control, not a volume control.
 
 ## Max gain per output channel (safety ceiling)
 
@@ -128,8 +128,13 @@ With a −15 dB ceiling, 100% means −15 dB, and a zone at −22.5 dB shows as 
 - Leave the field blank to keep the old behaviour and not write MAXGAIN at all.
 - The ceilings are re-applied on every setup, so a change made in G-Ware or from the
   front panel is restored the next time Home Assistant starts.
-- Lowering MAXGAIN below a channel's current GAIN will pull that GAIN down to the new
-  ceiling — check your current levels before choosing a value.
+- **Lowering MAXGAIN does _not_ pull an existing GAIN down with it.** An earlier version
+  of this file said it did. It does not: on 2026-09-06 a reload wrote all eight ceilings to
+  −15.00 while the outputs stayed at −7.50 to −13.34, leaving every channel sitting *above*
+  its ceiling. `volume_level` is a ratio against MAXGAIN, so those zones then reported
+  values greater than 1.0 — `zone_kitchen_dining` read **2.371**, a slider at 237% — and any
+  slider move wrote dB against a ceiling the levels had never been chosen for. Read `GAIN`
+  and `MAX` back after changing a ceiling; a zone reading above 1.0 is the visible symptom.
 
 ## Raw command access (`xap_controller.send_command`)
 

@@ -2,10 +2,11 @@
     "domain": "xap_controller",
     "name": "ClearOne XAP Controller",
     "config_flow": true,
-    "documentation": "https://github.com/jslove/xap_controller/blob/master/README.md",
+    "documentation": "https://github.com/defl/xap_controller/blob/master/README.md",
     "dependencies": [],
     "codeowners": [
-        "jslove"
+        "@jslove",
+        "@defl"
     ],
     "version": "2026.08.31.2",
     "iot_class": "local_polling",
